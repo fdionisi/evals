@@ -1,0 +1,24 @@
+# Project Overview
+
+This is a Rust project named "evals" using the 2024 edition. It's currently a minimal setup with a basic main function.
+
+# Development Commands
+
+## Build and Run
+- `cargo build` - Build the project
+- `cargo run` - Build and run the project
+- `cargo check` - Quick check for compilation errors
+- `cargo clippy` - Run linting
+- `cargo fmt` - Format code
+
+## Testing
+- `cargo test` - Run all tests
+- `cargo test <test_name>` - Run specific test
+
+# Architecture
+
+Currently a simple single-file Rust application with main.rs as the entry point. No additional dependencies or complex architecture at this time.
+
+# Rust Project Structure
+
+- Avoid creating modules as `<module_name>/mod.rs` but rather `<module_name>.rs` and `<module_name>/<submodule>.rs`

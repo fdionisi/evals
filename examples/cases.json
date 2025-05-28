@@ -1,0 +1,42 @@
+[
+  {
+    "input": "What is 2 + 2?",
+    "expected_output": "4",
+    "metadata": {
+      "category": "math",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "input": "Explain what photosynthesis is in one sentence.",
+    "expected_output": "Photosynthesis is the process by which plants convert sunlight, carbon dioxide, and water into glucose and oxygen.",
+    "metadata": {
+      "category": "science",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "input": "Write a Python function to calculate the factorial of a number.",
+    "expected_output": null,
+    "metadata": {
+      "category": "programming",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "input": "What is the capital of France?",
+    "expected_output": "Paris",
+    "metadata": {
+      "category": "geography",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "input": "Translate 'Hello, how are you?' to Spanish.",
+    "expected_output": "Hola, ¿cómo estás?",
+    "metadata": {
+      "category": "language",
+      "difficulty": "easy"
+    }
+  }
+]
