@@ -3,7 +3,7 @@ pub mod openai;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use crate::ModelConfig;
 
@@ -43,9 +43,28 @@ pub enum GenerationResult {
     },
 }
 
+impl fmt::Display for GenerationResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GenerationResult::Text(text) => write!(f, "{}", text),
+            GenerationResult::ToolUse { name, arguments } => {
+                write!(
+                    f,
+                    "{{ \"name\": \"{}\", \"arguments\": {} }}",
+                    name, arguments
+                )
+            }
+        }
+    }
+}
+
 #[async_trait::async_trait]
 pub trait ConversationModel: Send + Sync {
-    async fn generate(&self, prompt: &str, config: &InternalConfig) -> Result<GenerationResult>;
+    async fn generate(
+        &self,
+        prompt: &str,
+        config: &InternalConfig,
+    ) -> Result<Vec<GenerationResult>>;
 }
 
 pub fn create_model(provider: &str) -> Result<Arc<dyn ConversationModel>> {

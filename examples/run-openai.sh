@@ -31,6 +31,7 @@ cargo run --release -- run \
     --system "You are a helpful and accurate assistant. Provide clear, concise answers." \
     --threshold 0.7 \
     --judge-model claude-3-5-sonnet-20241022 \
+    --mcp-servers examples/mcp-servers.json \
     --output openai-evaluation-report.json
 
 echo ""

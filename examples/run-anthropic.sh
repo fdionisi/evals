@@ -31,6 +31,7 @@ cargo run --release -- run \
     --system @examples/system-prompt.txt \
     --threshold 0.7 \
     --judge-model claude-3-5-sonnet-20241022 \
+    --mcp-servers examples/mcp-servers.json \
     --output anthropic-evaluation-report.json
 
 echo ""

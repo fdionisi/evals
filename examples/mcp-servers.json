@@ -1,0 +1,11 @@
+{
+  "servers": [
+    {
+      "name": "perplexity",
+      "type": "local",
+      "command": ["perplexity-mcp"],
+      "args": [],
+      "env": {}
+    }
+  ]
+}

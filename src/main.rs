@@ -1,17 +1,17 @@
-mod ui;
 mod conversation_model;
+mod ui;
 
 use std::{collections::HashMap, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
+use rmcp::{service::ServiceExt, transport::TokioChildProcess};
 use serde::{Deserialize, Serialize};
 use tokio_stream::{Stream, StreamExt};
 
 use conversation_model::{
-    ConversationModel, GenerationResult, InternalConfig, ToolDefinition,
-    create_model,
+    ConversationModel, GenerationResult, InternalConfig, ToolDefinition, create_model,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -71,7 +71,6 @@ pub struct JudgePrompt {
     pub user_template: String,
 }
 
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ModelConfig {
     pub provider: String,
@@ -99,21 +98,117 @@ impl Default for ModelConfig {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct McpServersConfig {
+    pub servers: Vec<McpServerConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct McpServerConfig {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub server_type: McpServerType,
+    pub command: Vec<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum McpServerType {
+    Local,
+}
+
+pub struct McpManager {
+    available_tools: Vec<ToolDefinition>,
+}
+
+impl McpManager {
+    pub async fn start_servers(configs: &[McpServerConfig]) -> Result<Self> {
+        let mut all_tools = Vec::new();
+
+        for config in configs {
+            let mut cmd = tokio::process::Command::new(&config.command[0]);
+            cmd.args(&config.args);
+
+            for (key, value) in &config.env {
+                cmd.env(key, value);
+            }
+
+            let transport = TokioChildProcess::new(&mut cmd)
+                .map_err(|e| anyhow!("Failed to create transport for '{}': {}", config.name, e))?;
+
+            let service = ()
+                .serve(transport)
+                .await
+                .map_err(|e| anyhow!("Failed to create service for '{}': {}", config.name, e))?;
+
+            let tools_response = service
+                .list_tools(Default::default())
+                .await
+                .map_err(|e| anyhow!("Failed to list tools for '{}': {}", config.name, e))?;
+
+            for tool in tools_response.tools {
+                let tool_def = ToolDefinition {
+                    name: tool.name.to_string(),
+                    description: tool.description.to_string(),
+                    schema: serde_json::Value::Object((*tool.input_schema).clone()),
+                };
+                all_tools.push(tool_def);
+            }
+        }
+
+        Ok(Self {
+            available_tools: all_tools,
+        })
+    }
+
+    pub async fn get_available_tools(&self) -> Result<Vec<ToolDefinition>> {
+        Ok(self.available_tools.clone())
+    }
+}
+
 pub struct TestedModel {
     model: Arc<dyn ConversationModel>,
+    mcp_manager: Option<Arc<McpManager>>,
 }
 
 impl TestedModel {
     pub fn new(model: Arc<dyn ConversationModel>) -> Self {
-        Self { model }
+        Self {
+            model,
+            mcp_manager: None,
+        }
+    }
+
+    pub fn with_mcp(model: Arc<dyn ConversationModel>, mcp_manager: Arc<McpManager>) -> Self {
+        Self {
+            model,
+            mcp_manager: Some(mcp_manager),
+        }
     }
 
     pub async fn respond(&self, input: &str, config: &ModelConfig) -> Result<String> {
-        let internal_config = InternalConfig::new(config.clone());
-        match self.model.generate(input, &internal_config).await? {
-            GenerationResult::Text(text) => Ok(text),
-            _ => Err(anyhow!("Expected text response from tested model")),
+        let mut enhanced_config = config.clone();
+
+        if let Some(mcp_manager) = &self.mcp_manager {
+            let mcp_tools = mcp_manager.get_available_tools().await?;
+            let mut all_tools = enhanced_config.tools.unwrap_or_default();
+            all_tools.extend(mcp_tools);
+            enhanced_config.tools = Some(all_tools);
         }
+
+        let internal_config = InternalConfig::new(enhanced_config);
+        let results = self.model.generate(input, &internal_config).await?;
+
+        let mut response = String::new();
+        for result in results {
+            response.push_str(&format!("{result}\n"));
+        }
+
+        Ok(response.trim().to_string())
     }
 }
 
@@ -173,24 +268,29 @@ impl JudgeModel {
         let internal_config =
             InternalConfig::new(judge_config).with_forced_tool("evaluate_response".to_string());
 
-        match self.model.generate(&prompt_text, &internal_config).await? {
-            GenerationResult::ToolUse { name: _, arguments } => {
-                let score = arguments["score"].as_f64().unwrap_or(0.0);
-                let reasoning = arguments["reasoning"]
-                    .as_str()
-                    .unwrap_or("No reasoning provided")
-                    .to_string();
-                Ok((score, reasoning))
+        let results = self.model.generate(&prompt_text, &internal_config).await?;
+
+        for result in results {
+            match result {
+                GenerationResult::ToolUse { name: _, arguments } => {
+                    let score = arguments["score"].as_f64().unwrap_or(0.0);
+                    let reasoning = arguments["reasoning"]
+                        .as_str()
+                        .unwrap_or("No reasoning provided")
+                        .to_string();
+                    return Ok((score, reasoning));
+                }
+                _ => continue,
             }
-            _ => Err(anyhow!("Expected tool use response from judge model")),
         }
+
+        Err(anyhow!("Expected tool use response from judge model"))
     }
 
     pub fn prompt(&self) -> &JudgePrompt {
         &self.prompt
     }
 }
-
 
 impl Default for JudgePrompt {
     fn default() -> Self {
@@ -234,6 +334,8 @@ pub enum Commands {
         system: Option<String>,
         #[arg(long)]
         output: Option<String>,
+        #[arg(long)]
+        mcp_servers: Option<String>,
     },
 }
 
@@ -282,6 +384,7 @@ async fn main() -> Result<()> {
             top_p,
             system,
             output,
+            mcp_servers,
         } => {
             let threshold = threshold.unwrap_or(0.8);
             let start_time = std::time::Instant::now();
@@ -315,7 +418,24 @@ async fn main() -> Result<()> {
 
             let conversation_model = create_model(&provider)?;
 
-            let tested_model = Arc::new(TestedModel::new(Arc::clone(&conversation_model)));
+            let mcp_manager = if let Some(mcp_config_path) = mcp_servers {
+                let mcp_config_content = tokio::fs::read_to_string(&mcp_config_path).await?;
+                let mcp_config: McpServersConfig = serde_json::from_str(&mcp_config_content)?;
+                Some(Arc::new(
+                    McpManager::start_servers(&mcp_config.servers).await?,
+                ))
+            } else {
+                None
+            };
+
+            let tested_model = if let Some(mcp_manager) = mcp_manager {
+                Arc::new(TestedModel::with_mcp(
+                    Arc::clone(&conversation_model),
+                    mcp_manager,
+                ))
+            } else {
+                Arc::new(TestedModel::new(Arc::clone(&conversation_model)))
+            };
 
             let _judge_model_name =
                 judge_model.unwrap_or_else(|| "claude-3-5-sonnet-20241022".to_string());

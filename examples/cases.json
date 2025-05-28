@@ -38,5 +38,13 @@
       "category": "language",
       "difficulty": "easy"
     }
+  },
+  {
+    "input": "Search for recent news about Rust programming language developments",
+    "expected_output": "Research tool used",
+    "metadata": {
+      "category": "web_search",
+      "description": "Tests ability to use web search tools for information gathering"
+    }
   }
 ]

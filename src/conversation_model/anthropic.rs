@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use super::{ConversationModel, GenerationResult, InternalConfig};
 
@@ -16,7 +16,11 @@ impl AnthropicModel {
 
 #[async_trait::async_trait]
 impl ConversationModel for AnthropicModel {
-    async fn generate(&self, prompt: &str, config: &InternalConfig) -> Result<GenerationResult> {
+    async fn generate(
+        &self,
+        prompt: &str,
+        config: &InternalConfig,
+    ) -> Result<Vec<GenerationResult>> {
         let client = reqwest::Client::new();
 
         let mut request_body = serde_json::json!({
@@ -81,22 +85,25 @@ impl ConversationModel for AnthropicModel {
 
         let json: serde_json::Value = response.json().await?;
 
-        if config.model_config.tools.is_some() {
-            if let Some(content) = json["content"].as_array() {
-                for item in content {
-                    if item["type"] == "tool_use" {
-                        let name = item["name"].as_str().unwrap_or("unknown").to_string();
-                        let arguments = item["input"].clone();
-                        return Ok(GenerationResult::ToolUse { name, arguments });
-                    }
+        let mut results = Vec::new();
+
+        if let Some(content) = json["content"].as_array() {
+            for item in content {
+                if item["type"] == "tool_use" {
+                    let name = item["name"].as_str().unwrap_or("unknown").to_string();
+                    let arguments = item["input"].clone();
+                    results.push(GenerationResult::ToolUse { name, arguments });
+                } else if item["type"] == "text" {
+                    let text = item["text"].as_str().unwrap_or("Failed to get response");
+                    results.push(GenerationResult::Text(text.to_string()));
                 }
             }
-            Err(anyhow!("Expected tool use response but none found"))
+        }
+
+        if results.is_empty() {
+            Err(anyhow!("No valid content found in response"))
         } else {
-            let content = json["content"][0]["text"]
-                .as_str()
-                .unwrap_or("Failed to get response");
-            Ok(GenerationResult::Text(content.to_string()))
+            Ok(results)
         }
     }
 }

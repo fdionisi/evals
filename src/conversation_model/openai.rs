@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use super::{ConversationModel, GenerationResult, InternalConfig};
 
@@ -16,7 +16,11 @@ impl OpenAIModel {
 
 #[async_trait::async_trait]
 impl ConversationModel for OpenAIModel {
-    async fn generate(&self, prompt: &str, config: &InternalConfig) -> Result<GenerationResult> {
+    async fn generate(
+        &self,
+        prompt: &str,
+        config: &InternalConfig,
+    ) -> Result<Vec<GenerationResult>> {
         let client = reqwest::Client::new();
 
         let mut messages = Vec::new();
@@ -87,28 +91,36 @@ impl ConversationModel for OpenAIModel {
 
         let json: serde_json::Value = response.json().await?;
 
-        if config.model_config.tools.is_some() {
-            if let Some(message) = json["choices"][0]["message"].as_object() {
-                if let Some(tool_calls) = message["tool_calls"].as_array() {
-                    if let Some(tool_call) = tool_calls.first() {
-                        let name = tool_call["function"]["name"]
-                            .as_str()
-                            .unwrap_or("unknown")
-                            .to_string();
-                        let arguments: serde_json::Value = serde_json::from_str(
-                            tool_call["function"]["arguments"].as_str().unwrap_or("{}"),
-                        )
-                        .unwrap_or_default();
-                        return Ok(GenerationResult::ToolUse { name, arguments });
-                    }
+        let mut results = Vec::new();
+
+        if let Some(message) = json["choices"][0]["message"].as_object() {
+            // Handle text content if present
+            if let Some(content) = message["content"].as_str() {
+                if !content.is_empty() {
+                    results.push(GenerationResult::Text(content.to_string()));
                 }
             }
-            Err(anyhow!("Expected tool call response but none found"))
-        } else {
-            let content = json["choices"][0]["message"]["content"]
-                .as_str()
-                .unwrap_or("Failed to get response");
-            Ok(GenerationResult::Text(content.to_string()))
+
+            // Handle tool calls if present
+            if let Some(tool_calls) = message["tool_calls"].as_array() {
+                for tool_call in tool_calls {
+                    let name = tool_call["function"]["name"]
+                        .as_str()
+                        .unwrap_or("unknown")
+                        .to_string();
+                    let arguments: serde_json::Value = serde_json::from_str(
+                        tool_call["function"]["arguments"].as_str().unwrap_or("{}"),
+                    )
+                    .unwrap_or_default();
+                    results.push(GenerationResult::ToolUse { name, arguments });
+                }
+            }
         }
+
+        if results.is_empty() {
+            results.push(GenerationResult::Text("Failed to get response".to_string()));
+        }
+
+        Ok(results)
     }
 }
