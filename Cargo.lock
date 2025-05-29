@@ -317,6 +317,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "clap",
+ "futures",
  "indicatif",
  "owo-colors",
  "reqwest",

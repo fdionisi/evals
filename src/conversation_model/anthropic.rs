@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use tokio::time::{Duration, sleep};
 
 use super::{ConversationModel, GenerationResult, InternalConfig};
 
@@ -74,36 +75,50 @@ impl ConversationModel for AnthropicModel {
             );
         }
 
-        let response = client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("Content-Type", "application/json")
-            .json(&request_body)
-            .send()
-            .await?;
+        loop {
+            let response = client
+                .post("https://api.anthropic.com/v1/messages")
+                .header("x-api-key", &self.api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("Content-Type", "application/json")
+                .json(&request_body)
+                .send()
+                .await?;
 
-        let json: serde_json::Value = response.json().await?;
+            if response.status() == 429 {
+                if let Some(retry_after) = response.headers().get("retry-after") {
+                    if let Ok(retry_seconds) = retry_after.to_str().unwrap_or("60").parse::<u64>() {
+                        sleep(Duration::from_secs(retry_seconds)).await;
+                        continue;
+                    }
+                }
 
-        let mut results = Vec::new();
+                sleep(Duration::from_secs(60)).await;
+                continue;
+            }
 
-        if let Some(content) = json["content"].as_array() {
-            for item in content {
-                if item["type"] == "tool_use" {
-                    let name = item["name"].as_str().unwrap_or("unknown").to_string();
-                    let arguments = item["input"].clone();
-                    results.push(GenerationResult::ToolUse { name, arguments });
-                } else if item["type"] == "text" {
-                    let text = item["text"].as_str().unwrap_or("Failed to get response");
-                    results.push(GenerationResult::Text(text.to_string()));
+            let json: serde_json::Value = response.json().await?;
+
+            let mut results = Vec::new();
+
+            if let Some(content) = json["content"].as_array() {
+                for item in content {
+                    if item["type"] == "tool_use" {
+                        let name = item["name"].as_str().unwrap_or("unknown").to_string();
+                        let arguments = item["input"].clone();
+                        results.push(GenerationResult::ToolUse { name, arguments });
+                    } else if item["type"] == "text" {
+                        let text = item["text"].as_str().unwrap_or("Failed to get response");
+                        results.push(GenerationResult::Text(text.to_string()));
+                    }
                 }
             }
-        }
 
-        if results.is_empty() {
-            Err(anyhow!("No valid content found in response"))
-        } else {
-            Ok(results)
+            if results.is_empty() {
+                return Err(anyhow!("No valid content found in response"));
+            } else {
+                return Ok(results);
+            }
         }
     }
 }

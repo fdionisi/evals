@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use rmcp::{service::ServiceExt, transport::TokioChildProcess};
 use serde::{Deserialize, Serialize};
 use tokio_stream::{Stream, StreamExt};
+use futures::stream::FuturesUnordered;
 
 use conversation_model::{
     ConversationModel, GenerationResult, InternalConfig, ToolDefinition, create_model,
@@ -346,25 +347,30 @@ pub fn run_eval_stream(
     judge: Arc<JudgeModel>,
     threshold: f64,
 ) -> impl Stream<Item = Result<EvalResult>> {
-    tokio_stream::iter(cases).then(move |case| {
-        let tested_model = Arc::clone(&tested_model);
-        let config = Arc::clone(&config);
-        let judge = Arc::clone(&judge);
+    let futures: FuturesUnordered<_> = cases
+        .into_iter()
+        .map(|case| {
+            let tested_model = Arc::clone(&tested_model);
+            let config = Arc::clone(&config);
+            let judge = Arc::clone(&judge);
 
-        async move {
-            let actual_output = tested_model.respond(&case.input, &config).await?;
-            let (judge_score, judge_reasoning) = judge.evaluate(&case, &actual_output).await?;
-            let passed = judge_score >= threshold;
+            async move {
+                let actual_output = tested_model.respond(&case.input, &config).await?;
+                let (judge_score, judge_reasoning) = judge.evaluate(&case, &actual_output).await?;
+                let passed = judge_score >= threshold;
 
-            Ok(EvalResult {
-                case,
-                actual_output,
-                judge_score,
-                judge_reasoning,
-                passed,
-            })
-        }
-    })
+                Ok(EvalResult {
+                    case,
+                    actual_output,
+                    judge_score,
+                    judge_reasoning,
+                    passed,
+                })
+            }
+        })
+        .collect();
+
+    futures
 }
 
 #[tokio::main]

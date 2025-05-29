@@ -17,3 +17,4 @@ owo-colors = "4.0"
 chrono = { version = "0.4", features = ["serde"] }
 rmcp = { version = "0.1.5", features = ["client", "transport-child-process"] }
 rmcp-macros = "0.1.5"
+futures = "0.3"

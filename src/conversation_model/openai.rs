@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use std::time::Duration;
 
 use super::{ConversationModel, GenerationResult, InternalConfig};
 
@@ -81,46 +82,70 @@ impl ConversationModel for OpenAIModel {
             );
         }
 
-        let response = client
-            .post("https://api.openai.com/v1/chat/completions")
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&request_body)
-            .send()
-            .await?;
+        let mut retry_delay = Duration::from_secs(1);
+        const MAX_RETRY_DELAY: Duration = Duration::from_secs(60);
 
-        let json: serde_json::Value = response.json().await?;
+        loop {
+            let response = client
+                .post("https://api.openai.com/v1/chat/completions")
+                .header("Authorization", format!("Bearer {}", self.api_key))
+                .header("Content-Type", "application/json")
+                .json(&request_body)
+                .send()
+                .await?;
 
-        let mut results = Vec::new();
+            if response.status() == 429 {
+                let wait_time = if let Some(retry_after) = response.headers().get("retry-after") {
+                    if let Ok(retry_after_str) = retry_after.to_str() {
+                        if let Ok(seconds) = retry_after_str.parse::<u64>() {
+                            Duration::from_secs(seconds)
+                        } else {
+                            retry_delay
+                        }
+                    } else {
+                        retry_delay
+                    }
+                } else {
+                    retry_delay
+                };
 
-        if let Some(message) = json["choices"][0]["message"].as_object() {
-            // Handle text content if present
-            if let Some(content) = message["content"].as_str() {
-                if !content.is_empty() {
-                    results.push(GenerationResult::Text(content.to_string()));
+                tokio::time::sleep(wait_time).await;
+
+                retry_delay = std::cmp::min(retry_delay * 2, MAX_RETRY_DELAY);
+                continue;
+            }
+
+            let json: serde_json::Value = response.json().await?;
+
+            let mut results = Vec::new();
+
+            if let Some(message) = json["choices"][0]["message"].as_object() {
+                if let Some(content) = message["content"].as_str() {
+                    if !content.is_empty() {
+                        results.push(GenerationResult::Text(content.to_string()));
+                    }
+                }
+
+                if let Some(tool_calls) = message["tool_calls"].as_array() {
+                    for tool_call in tool_calls {
+                        let name = tool_call["function"]["name"]
+                            .as_str()
+                            .unwrap_or("unknown")
+                            .to_string();
+                        let arguments: serde_json::Value = serde_json::from_str(
+                            tool_call["function"]["arguments"].as_str().unwrap_or("{}"),
+                        )
+                        .unwrap_or_default();
+                        results.push(GenerationResult::ToolUse { name, arguments });
+                    }
                 }
             }
 
-            // Handle tool calls if present
-            if let Some(tool_calls) = message["tool_calls"].as_array() {
-                for tool_call in tool_calls {
-                    let name = tool_call["function"]["name"]
-                        .as_str()
-                        .unwrap_or("unknown")
-                        .to_string();
-                    let arguments: serde_json::Value = serde_json::from_str(
-                        tool_call["function"]["arguments"].as_str().unwrap_or("{}"),
-                    )
-                    .unwrap_or_default();
-                    results.push(GenerationResult::ToolUse { name, arguments });
-                }
+            if results.is_empty() {
+                results.push(GenerationResult::Text("Failed to get response".to_string()));
             }
-        }
 
-        if results.is_empty() {
-            results.push(GenerationResult::Text("Failed to get response".to_string()));
+            return Ok(results);
         }
-
-        Ok(results)
     }
 }
