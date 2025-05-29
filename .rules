@@ -40,6 +40,10 @@ This is an AI model evaluation framework built in Rust 2024 edition using async 
 - Prefer `FuturesUnordered` for concurrent execution
 - Stream-based processing for large datasets
 
+## Code Comments
+- Avoid inline comments that directly describe code intention
+- Only add inline comments for complex codepaths or specific annotations
+
 # Rust Project Structure
 
 - Follow `<module_name>.rs` and `<module_name>/<submodule>.rs` pattern

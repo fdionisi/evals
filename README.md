@@ -1,44 +1,50 @@
-# AI Evals
+<div align="center">
+    <h1>Evals 🧪</h1>
+    <p>
+        A deadly simple evaluation framework for AI models.
+    </p>
+    <sub>
+        Built with Rust and MCP integration.
+    </sub>
+</div>
 
-A simple, fast AI evaluation library in Rust for testing language models with AI-as-a-judge scoring.
+## Abstract
 
-## Features
+Many **production-ready** evaluation frameworks exist; **this is not one of them**. Behind this project lies pure exploration of what makes AI model evaluation simple and effective. The focus is on delivering a fast, no-nonsense evaluation tool that integrates seamlessly with Model Context Protocol (MCP) servers, allowing models to use external tools during testing.
 
-- **Multi-provider support**: Anthropic and OpenAI models
-- **AI judge evaluation**: Automated scoring using Claude as judge
-- **Flexible configuration**: All parameters via CLI
-- **File-based system prompts**: Load prompts from files with `@` prefix
-- **Async execution**: Built on tokio for performance
-- **Clean architecture**: Extensible for new providers
+The framework uses AI-as-a-judge methodology with configurable scoring, supports multiple providers (Anthropic, OpenAI), and generates structured reports. It's designed to be embedded in CI pipelines or used standalone for model comparison and quality assessment.
+
+As with many of my Rust projects, this is also an opportunity to practice clean architecture and async patterns whilst building something genuinely useful.
 
 ## Quick Start
 
-1. **Install Rust** (if not already installed):
-   ```bash
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   ```
+Install Rust, clone the repository, and set your API keys:
 
-2. **Clone and build**:
-   ```bash
-   git clone <repository>
-   cd evals
-   cargo build --release
-   ```
+```bash
+git clone <repository>
+cd evals
+export ANTHROPIC_API_KEY=your_key
+cargo run -- run --cases-file examples/cases.json --provider anthropic --model claude-3-5-sonnet-20241022
+```
 
-3. **Set API keys**:
-   ```bash
-   export ANTHROPIC_API_KEY=your_anthropic_key
-   export OPENAI_API_KEY=your_openai_key  # Optional, only for OpenAI models
-   ```
+## Core Features
 
-4. **Run example**:
-   ```bash
-   ./examples/run-anthropic.sh
-   ```
+**Multi-Provider Support**: Test Anthropic Claude and OpenAI GPT models with consistent interfaces
+
+**AI Judge Evaluation**: Automated scoring using Claude as judge with configurable thresholds
+
+**Flexible Test Cases**: Support exact matching, behavioural descriptions, or open-ended evaluation
+
+**MCP Integration**: Connect external tools like web search during model evaluation
+
+**Structured Reports**: Generate detailed JSON reports with statistics and category breakdowns
+
+**File-Based Configuration**: Load system prompts and configurations from files
 
 ## Usage
 
-### Basic Command
+### Basic Evaluation
+
 ```bash
 cargo run -- run \
     --cases-file examples/cases.json \
@@ -48,82 +54,108 @@ cargo run -- run \
     --threshold 0.8
 ```
 
+### With MCP Tools
+
+```bash
+cargo run -- run \
+    --cases-file examples/cases.json \
+    --provider anthropic \
+    --model claude-3-5-sonnet-20241022 \
+    --mcp-servers mcp-config.json \
+    --output evaluation-report.json
+```
+
 ### Parameters
 
 **Required:**
-- `--cases-file`: JSON file with test cases
+
+- `--cases-file`: JSON file containing test cases
 - `--provider`: "anthropic" or "openai"
-- `--model`: Model name
+- `--model`: Model identifier
 
 **Optional:**
-- `--max-tokens`: Max tokens (default: 1000)
+
+- `--max-tokens`: Generation limit (default: 1000)
 - `--temperature`: Sampling temperature
-- `--top-k`: Top-k sampling (Anthropic only)
-- `--top-p`: Top-p sampling  
-- `--system`: System prompt or `@file.txt`
+- `--top-k`, `--top-p`: Sampling parameters
+- `--system`: System prompt or `@filename.txt`
 - `--threshold`: Pass threshold (default: 0.8)
 - `--judge-model`: Judge model (default: claude-3-5-sonnet-20241022)
+- `--output`: Report output path
+- `--mcp-servers`: MCP configuration file
 
-### Test Cases Format
+## Test Cases Format
 
-Create a JSON file with test cases:
+Create evaluation cases in JSON:
+
 ```json
 [
   {
     "input": "What is 2 + 2?",
     "expected_output": "4",
-    "metadata": {
-      "category": "math",
-      "difficulty": "easy"
-    }
+    "metadata": { "category": "math", "difficulty": "easy" }
   },
   {
-    "input": "Explain photosynthesis",
-    "expected_output": null,
-    "metadata": {
-      "category": "science", 
-      "difficulty": "medium"
-    }
+    "input": "Search for recent AI developments",
+    "expected_output": {
+      "type": "behavior",
+      "description": "Uses search tools to find current information"
+    },
+    "metadata": { "category": "tool_use" }
   }
 ]
 ```
 
-## Examples
+**Expected Output Types:**
 
-See the `examples/` directory for:
-- Sample test cases (`cases.json`)
-- System prompt files (`system-prompt.txt`)
-- Ready-to-run scripts (`run-anthropic.sh`, `run-openai.sh`, `compare-models.sh`)
-- Detailed documentation (`examples/README.md`)
+- **String**: Exact content matching
+- **null**: Open-ended quality evaluation
+- **Object**: Flexible comparison or behaviour matching
+
+## MCP Integration
+
+Configure external tools via MCP servers:
+
+```json
+{
+  "servers": [
+    {
+      "name": "web_search",
+      "type": "local",
+      "command": ["search-mcp-server"],
+      "args": [],
+      "env": {}
+    }
+  ]
+}
+```
+
+Models can then use these tools during evaluation, enabling testing of tool usage capabilities alongside general knowledge.
 
 ## Architecture
 
-- **ConversationModel trait**: Abstraction for different AI providers
-- **Environment-based auth**: API keys from environment variables
-- **Async execution**: Non-blocking evaluation of test cases
-- **AI judge scoring**: Uses Claude to score model responses
-- **Extensible design**: Easy to add new providers (Ollama, etc.)
+The framework follows clean separation of concerns:
 
-## Supported Models
+- **ConversationModel**: Provider abstraction (Anthropic, OpenAI)
+- **JudgeModel**: AI-as-a-judge evaluation logic
+- **McpManager**: MCP server connection management
+- **TestedModel**: Model + tools composition
+- **Evaluation Pipeline**: Concurrent case processing
 
-**Anthropic:**
-- claude-3-5-sonnet-20241022
-- claude-3-5-haiku-20241022
-- claude-3-opus-20240229
+Built on async Rust with structured error handling and serializable reports.
 
-**OpenAI:**
-- gpt-4
-- gpt-4-turbo
-- gpt-3.5-turbo
+## Examples
 
-## Contributing
+See `examples/` directory for ready-to-run scripts and sample configurations:
 
-This is a simple library focused on core evaluation functionality. To add new providers:
-
-1. Implement the `ConversationModel` trait
-2. Add the provider to `create_model()` function
-3. Update documentation
+```bash
+./examples/run-anthropic.sh     # Basic Anthropic evaluation
+./examples/run-openai.sh        # OpenAI model testing
+./examples/compare-models.sh    # Multi-model comparison
+```
 
 ## License
 
-MIT
+_Evals_ is distributed under the terms of the MIT license.
+
+See [LICENSE](LICENSE) for details.

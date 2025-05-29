@@ -6,10 +6,10 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
+use futures::stream::FuturesUnordered;
 use rmcp::{service::ServiceExt, transport::TokioChildProcess};
 use serde::{Deserialize, Serialize};
 use tokio_stream::{Stream, StreamExt};
-use futures::stream::FuturesUnordered;
 
 use conversation_model::{
     ConversationModel, GenerationResult, InternalConfig, ToolDefinition, create_model,
@@ -260,8 +260,12 @@ impl JudgeModel {
     pub async fn evaluate(&self, case: &EvalCase, actual_output: &str) -> Result<(f64, String)> {
         let (expected_text, evaluation_type) = match &case.expected_output {
             Some(ExpectedOutput::String(content)) => (content.as_str(), "content"),
-            Some(ExpectedOutput::Object(ExpectedOutputObject::ContentComparison { description })) => (description.as_str(), "content"),
-            Some(ExpectedOutput::Object(ExpectedOutputObject::BehaviorDescription { description })) => (description.as_str(), "behavior"),
+            Some(ExpectedOutput::Object(ExpectedOutputObject::ContentComparison {
+                description,
+            })) => (description.as_str(), "content"),
+            Some(ExpectedOutput::Object(ExpectedOutputObject::BehaviorDescription {
+                description,
+            })) => (description.as_str(), "behavior"),
             None => ("N/A", "none"),
         };
 
