@@ -41,7 +41,10 @@
   },
   {
     "input": "Search for recent news about Rust programming language developments",
-    "expected_output": "Research tool used",
+    "expected_output": {
+      "type": "behavior",
+      "description": "Uses web search or research tools to find current information about Rust programming language developments, mentioning recency in the search approach"
+    },
     "metadata": {
       "category": "web_search",
       "description": "Tests ability to use web search tools for information gathering"

@@ -18,17 +18,51 @@ use conversation_model::{
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EvalCase {
     pub input: String,
-    pub expected_output: Option<String>,
+    pub expected_output: Option<ExpectedOutput>,
     pub metadata: HashMap<String, String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum ExpectedOutput {
+    String(String),
+    Object(ExpectedOutputObject),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum ExpectedOutputObject {
+    #[serde(rename = "comparison")]
+    ContentComparison { description: String },
+    #[serde(rename = "behavior")]
+    BehaviorDescription { description: String },
+}
+
+impl ExpectedOutput {
+    pub fn to_object(&self) -> Option<ExpectedOutputObject> {
+        match self {
+            ExpectedOutput::String(content) => Some(ExpectedOutputObject::ContentComparison {
+                description: content.clone(),
+            }),
+            ExpectedOutput::Object(obj) => Some(obj.clone()),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EvalResult {
-    pub case: EvalCase,
+    pub case: EvalCaseReport,
     pub actual_output: String,
     pub judge_score: f64,
     pub judge_reasoning: String,
     pub passed: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EvalCaseReport {
+    pub input: String,
+    pub expected_output: Option<ExpectedOutputObject>,
+    pub metadata: HashMap<String, String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -224,15 +258,20 @@ impl JudgeModel {
     }
 
     pub async fn evaluate(&self, case: &EvalCase, actual_output: &str) -> Result<(f64, String)> {
+        let (expected_text, evaluation_type) = match &case.expected_output {
+            Some(ExpectedOutput::String(content)) => (content.as_str(), "content"),
+            Some(ExpectedOutput::Object(ExpectedOutputObject::ContentComparison { description })) => (description.as_str(), "content"),
+            Some(ExpectedOutput::Object(ExpectedOutputObject::BehaviorDescription { description })) => (description.as_str(), "behavior"),
+            None => ("N/A", "none"),
+        };
+
         let prompt_text = self
             .prompt
             .user_template
             .replace("{input}", &case.input)
-            .replace(
-                "{expected}",
-                &case.expected_output.as_deref().unwrap_or("N/A"),
-            )
-            .replace("{actual}", actual_output);
+            .replace("{expected}", expected_text)
+            .replace("{actual}", actual_output)
+            .replace("{evaluation_type}", evaluation_type);
 
         let eval_tool = ToolDefinition {
             name: "evaluate_response".to_string(),
@@ -296,8 +335,8 @@ impl JudgeModel {
 impl Default for JudgePrompt {
     fn default() -> Self {
         Self {
-            system: "You are an AI judge evaluating response quality. You must use the evaluate_response tool to provide your assessment.".to_string(),
-            user_template: "Evaluate this response:\n\nInput: {input}\nExpected: {expected}\nActual: {actual}\n\nUse the evaluate_response tool to provide your score (0.0-1.0) and reasoning.".to_string(),
+            system: "You are an AI judge evaluating response quality. You must use the evaluate_response tool to provide your assessment. Consider the evaluation type when scoring.".to_string(),
+            user_template: "Evaluate this response:\n\nInput: {input}\nExpected: {expected}\nActual: {actual}\nEvaluation Type: {evaluation_type}\n\nEvaluation Instructions:\n- If evaluation_type is 'content': Compare the actual output against the expected content. The actual output should convey the same meaning/information as expected, but doesn't need to be word-for-word identical.\n- If evaluation_type is 'behavior': Assess whether the actual output demonstrates the described behavior. The expected text describes how the model should behave, not what it should output.\n- If evaluation_type is 'none': Evaluate the general quality and appropriateness of the response.\n\nUse the evaluate_response tool to provide your score (0.0-1.0) and reasoning.".to_string(),
         }
     }
 }
@@ -359,8 +398,14 @@ pub fn run_eval_stream(
                 let (judge_score, judge_reasoning) = judge.evaluate(&case, &actual_output).await?;
                 let passed = judge_score >= threshold;
 
+                let case_report = EvalCaseReport {
+                    input: case.input.clone(),
+                    expected_output: case.expected_output.as_ref().and_then(|e| e.to_object()),
+                    metadata: case.metadata.clone(),
+                };
+
                 Ok(EvalResult {
-                    case,
+                    case: case_report,
                     actual_output,
                     judge_score,
                     judge_reasoning,
