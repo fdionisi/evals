@@ -1,6 +1,6 @@
 # Project Overview
 
-This is a Rust project named "evals" using the 2024 edition. It's currently a minimal setup with a basic main function.
+This is an AI model evaluation framework built in Rust 2024 edition using async streams and pluggable providers.
 
 # Development Commands
 
@@ -15,10 +15,41 @@ This is a Rust project named "evals" using the 2024 edition. It's currently a mi
 - `cargo test` - Run all tests
 - `cargo test <test_name>` - Run specific test
 
-# Architecture
+# Architecture Guidelines
 
-Currently a simple single-file Rust application with main.rs as the entry point. No additional dependencies or complex architecture at this time.
+## Design Patterns
+- Use async/await with tokio streams for concurrent operations
+- Implement provider abstraction through traits
+- Prefer strongly-typed structs over generic collections
+- Prefer strongly-typed structs over type alias
+- Use enums for structured data variants
+- Serialize reports in consistent object format regardless of input format
+
+## Error Handling
+- Use `anyhow::Result` for fallible operations
+- Provide meaningful error context
+
+## Data Serialization
+- All core data structures should derive `Serialize/Deserialize`
+- Use `#[serde(untagged)]` for flexible input formats
+- Use `#[serde(tag = "type")]` for structured output formats
+- Convert flexible input to structured format in reports
+
+## Async Patterns
+- Use `Arc<T>` for shared state across async tasks
+- Prefer `FuturesUnordered` for concurrent execution
+- Stream-based processing for large datasets
 
 # Rust Project Structure
 
-- Avoid creating modules as `<module_name>/mod.rs` but rather `<module_name>.rs` and `<module_name>/<submodule>.rs`
+- Follow `<module_name>.rs` and `<module_name>/<submodule>.rs` pattern
+- Avoid `<module_name>/mod.rs` structure
+- Keep main orchestration logic in `main.rs`
+- Separate concerns into dedicated modules (ui, providers, etc.)
+
+# Key Dependencies
+- `tokio` - Async runtime
+- `clap` - CLI with derive macros
+- `serde/serde_json` - Serialization
+- `anyhow` - Error handling
+- `async-trait` - Async trait abstractions
