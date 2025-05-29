@@ -48,7 +48,6 @@ This is an AI model evaluation framework built in Rust 2024 edition using async 
 
 - Follow `<module_name>.rs` and `<module_name>/<submodule>.rs` pattern
 - Avoid `<module_name>/mod.rs` structure
-- Keep main orchestration logic in `main.rs`
 - Separate concerns into dedicated modules (ui, providers, etc.)
 
 # Key Dependencies

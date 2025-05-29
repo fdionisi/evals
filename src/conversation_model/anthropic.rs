@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow};
 use tokio::time::{Duration, sleep};
 
-use super::{ConversationModel, GenerationResult, InternalConfig};
+use super::{ConversationConifg, ConversationModel, GenerationResult};
 
 pub struct AnthropicModel {
     api_key: String,
@@ -20,7 +20,7 @@ impl ConversationModel for AnthropicModel {
     async fn generate(
         &self,
         prompt: &str,
-        config: &InternalConfig,
+        config: &ConversationConifg,
     ) -> Result<Vec<GenerationResult>> {
         let client = reqwest::Client::new();
 

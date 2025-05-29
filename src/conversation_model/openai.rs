@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow};
 use std::time::Duration;
 
-use super::{ConversationModel, GenerationResult, InternalConfig};
+use super::{ConversationConifg, ConversationModel, GenerationResult};
 
 pub struct OpenAIModel {
     api_key: String,
@@ -20,7 +20,7 @@ impl ConversationModel for OpenAIModel {
     async fn generate(
         &self,
         prompt: &str,
-        config: &InternalConfig,
+        config: &ConversationConifg,
     ) -> Result<Vec<GenerationResult>> {
         let client = reqwest::Client::new();
 

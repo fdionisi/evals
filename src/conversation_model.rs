@@ -15,12 +15,12 @@ pub struct ToolDefinition {
 }
 
 #[derive(Debug, Clone)]
-pub struct InternalConfig {
+pub struct ConversationConifg {
     pub model_config: ModelConfig,
     pub force_tool: Option<String>,
 }
 
-impl InternalConfig {
+impl ConversationConifg {
     pub fn new(model_config: ModelConfig) -> Self {
         Self {
             model_config,
@@ -63,7 +63,7 @@ pub trait ConversationModel: Send + Sync {
     async fn generate(
         &self,
         prompt: &str,
-        config: &InternalConfig,
+        config: &ConversationConifg,
     ) -> Result<Vec<GenerationResult>>;
 }
 
