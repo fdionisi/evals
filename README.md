@@ -16,7 +16,7 @@ The framework uses AI-as-a-judge methodology with configurable scoring, supports
 
 As with many of my Rust projects, this is also an opportunity to practice clean architecture and async patterns whilst building something genuinely useful.
 
-## Quick Start
+## Quick start
 
 Install Rust, clone the repository, and set your API keys:
 
@@ -27,23 +27,17 @@ export ANTHROPIC_API_KEY=your_key
 cargo run -- run --cases-file examples/cases.json --provider anthropic --model claude-3-5-sonnet-20241022
 ```
 
-## Core Features
+## Core features
 
-**Multi-Provider Support**: Test Anthropic Claude and OpenAI GPT models with consistent interfaces
+At its heart, the framework provides **multi-provider support** that lets you test both Anthropic and OpenAI foundation models through consistent interfaces, removing the friction of switching between different API formats. The evaluation process relies on **AI judge methodology**, where Claude automatically scores responses against your test cases with configurable pass thresholds, eliminating the need for manual assessment.
 
-**AI Judge Evaluation**: Automated scoring using Claude as judge with configurable thresholds
+Test cases themselves are designed to be **flexible** - you can define exact string matches for factual questions, describe expected behaviors for complex interactions, or leave evaluations completely open-ended for quality assessment. It seamlessly integrate with **MCP** servers, connecting external tools like web search capabilities, enabling you to test tool usage alongside pure reasoning.
 
-**Flexible Test Cases**: Support exact matching, behavioural descriptions, or open-ended evaluation
-
-**MCP Integration**: Connect external tools like web search during model evaluation
-
-**Structured Reports**: Generate detailed JSON reports with statistics and category breakdowns
-
-**File-Based Configuration**: Load system prompts and configurations from files
+Everything flows into **structured reports** that generate detailed JSON output with comprehensive statistics and category breakdowns, while **file-based configuration** keeps your system prompts and settings organized and version-controlled.
 
 ## Usage
 
-### Basic Evaluation
+### Basic evaluation
 
 ```bash
 cargo run -- run \
@@ -54,7 +48,7 @@ cargo run -- run \
     --threshold 0.8
 ```
 
-### With MCP Tools
+### With MCP tools
 
 ```bash
 cargo run -- run \
@@ -84,7 +78,7 @@ cargo run -- run \
 - `--output`: Report output path
 - `--mcp-servers`: MCP configuration file
 
-## Test Cases Format
+## Test cases format
 
 Create evaluation cases in JSON:
 
@@ -106,13 +100,13 @@ Create evaluation cases in JSON:
 ]
 ```
 
-**Expected Output Types:**
+**Expected output types:**
 
 - **String**: Exact content matching
 - **null**: Open-ended quality evaluation
 - **Object**: Flexible comparison or behaviour matching
 
-## MCP Integration
+## MCP integration
 
 Configure external tools via MCP servers:
 
@@ -131,18 +125,6 @@ Configure external tools via MCP servers:
 ```
 
 Models can then use these tools during evaluation, enabling testing of tool usage capabilities alongside general knowledge.
-
-## Architecture
-
-The framework follows clean separation of concerns:
-
-- **ConversationModel**: Provider abstraction (Anthropic, OpenAI)
-- **JudgeModel**: AI-as-a-judge evaluation logic
-- **McpManager**: MCP server connection management
-- **TestedModel**: Model + tools composition
-- **Evaluation Pipeline**: Concurrent case processing
-
-Built on async Rust with structured error handling and serializable reports.
 
 ## Examples
 
