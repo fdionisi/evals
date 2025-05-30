@@ -125,6 +125,8 @@ impl TerminalUI {
         let scores: Vec<f64> = results.iter().map(|r| r.judge_score).collect();
         let avg_score = scores.iter().sum::<f64>() / scores.len() as f64;
 
+        let is_pass_at_k = results.iter().any(|r| r.pass_at_k.is_some());
+
         let (status_icon, status_text) = if pass_rate >= 80.0 {
             ("✓".green().to_string(), "passed".green().to_string())
         } else if pass_rate >= 60.0 {
@@ -133,16 +135,35 @@ impl TerminalUI {
             ("✗".red().to_string(), "failed".red().to_string())
         };
 
-        println!(
-            "  {} {} · {}/{} pass ({:.0}%) · avg {:.2} · {:.1}s",
-            status_icon,
-            status_text,
-            passed_count.to_string().bold(),
-            total_count,
-            pass_rate,
-            avg_score,
-            execution_time
-        );
+        if is_pass_at_k {
+            let k_value = results[0].pass_at_k.as_ref().unwrap().total_iterations;
+            println!(
+                "  {} {} · {}/{} pass@{} ({:.0}%) · avg {:.2} · {:.1}s",
+                status_icon,
+                status_text,
+                passed_count.to_string().bold(),
+                total_count,
+                k_value,
+                pass_rate,
+                avg_score,
+                execution_time
+            );
+        } else {
+            println!(
+                "  {} {} · {}/{} pass ({:.0}%) · avg {:.2} · {:.1}s",
+                status_icon,
+                status_text,
+                passed_count.to_string().bold(),
+                total_count,
+                pass_rate,
+                avg_score,
+                execution_time
+            );
+        }
+
+        if is_pass_at_k {
+            self.print_pass_at_k_details(results);
+        }
 
         let mut category_stats: std::collections::HashMap<String, (usize, usize)> =
             std::collections::HashMap::new();
@@ -166,6 +187,33 @@ impl TerminalUI {
                 print!("{} {}/{}", category.dimmed(), passed, total);
             }
             println!();
+        }
+    }
+
+    fn print_pass_at_k_details(&self, results: &[EvalResult]) {
+        for (i, result) in results.iter().enumerate() {
+            if let Some(pass_stats) = &result.pass_at_k {
+                let case_number = format!("#{}", i + 1);
+                let avg_judge_score_display = format!("{:.0}%", result.judge_score * 100.0);
+                let iterations_display = format!(
+                    "{}/{}",
+                    pass_stats.passed_iterations, pass_stats.total_iterations
+                );
+
+                let (icon, avg_judge_score) = if result.passed {
+                    ("✓", avg_judge_score_display.green().to_string())
+                } else {
+                    ("✗", avg_judge_score_display.red().to_string())
+                };
+
+                println!(
+                    "    {} {} {} {}",
+                    icon,
+                    case_number.dimmed(),
+                    iterations_display.dimmed(),
+                    avg_judge_score
+                );
+            }
         }
     }
 }

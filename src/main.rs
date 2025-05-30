@@ -19,7 +19,7 @@ use crate::{
     conversation_model::create_model,
     evaluation::{
         CategoryStats, EvalCase, EvalCaseReport, EvalResult, EvaluationReport, ReportMetadata,
-        ReportSummary,
+        ReportSummary, IterationResult, PassAtKStats,
     },
     judge::{JudgeModel, JudgePrompt},
     mcp_manager::{McpManager, McpServersConfig},
@@ -68,6 +68,9 @@ pub enum Commands {
         /// Top-p (nucleus) sampling parameter (0.0-1.0)
         #[arg(long)]
         top_p: Option<f64>,
+        /// Number of iterations to run for pass@k evaluation (default: 1)
+        #[arg(long)]
+        iterations: Option<usize>,
         /// System prompt (use @filename to load from file)
         #[arg(long)]
         system: Option<String>,
@@ -95,9 +98,32 @@ fn run_eval_stream(
             let judge = Arc::clone(&judge);
 
             async move {
-                let actual_output = tested_model.respond(&case.input, &config).await?;
-                let (judge_score, judge_reasoning) = judge.evaluate(&case, &actual_output).await?;
-                let passed = judge_score >= threshold;
+                let iterations_count = config.iterations.unwrap_or(1);
+                
+                let mut iteration_results = Vec::new();
+                let mut passed_count = 0;
+                let mut total_score = 0.0;
+
+                for _ in 0..iterations_count {
+                    let actual_output = tested_model.respond(&case.input, &config).await?;
+                    let (judge_score, judge_reasoning) = judge.evaluate(&case, &actual_output).await?;
+                    let passed = judge_score >= threshold;
+                    
+                    if passed {
+                        passed_count += 1;
+                    }
+                    total_score += judge_score;
+
+                    iteration_results.push(IterationResult {
+                        actual_output,
+                        judge_score,
+                        judge_reasoning,
+                        passed,
+                    });
+                }
+
+                let average_score = total_score / iterations_count as f64;
+                let overall_passed = passed_count > 0; // Pass if any iteration passes
 
                 let case_report = EvalCaseReport {
                     input: case.input.clone(),
@@ -105,12 +131,22 @@ fn run_eval_stream(
                     metadata: case.metadata.clone(),
                 };
 
+                let pass_at_k_stats = if iterations_count > 1 {
+                    Some(PassAtKStats {
+                        total_iterations: iterations_count,
+                        passed_iterations: passed_count,
+                        pass_rate: passed_count as f64 / iterations_count as f64,
+                    })
+                } else {
+                    None
+                };
+
                 Ok(EvalResult {
                     case: case_report,
-                    actual_output,
-                    judge_score,
-                    judge_reasoning,
-                    passed,
+                    judge_score: average_score,
+                    passed: overall_passed,
+                    iterations: iteration_results,
+                    pass_at_k: pass_at_k_stats,
                 })
             }
         })
@@ -193,6 +229,7 @@ async fn main() -> Result<()> {
             temperature,
             top_k,
             top_p,
+            iterations,
             system,
             output,
             mcp_servers,
@@ -225,6 +262,7 @@ async fn main() -> Result<()> {
                 top_p,
                 system: system_prompt,
                 tools: None,
+                iterations,
             };
 
             let conversation_model = create_model(&provider)?;

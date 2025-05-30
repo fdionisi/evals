@@ -69,6 +69,7 @@ impl JudgeModel {
             top_p: None,
             system: Some(self.prompt.system.clone()),
             tools: Some(vec![eval_tool]),
+            iterations: None,
         };
 
         let internal_config =

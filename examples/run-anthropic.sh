@@ -27,11 +27,12 @@ cargo run --release -- run \
     --provider anthropic \
     --model claude-3-5-sonnet-20241022 \
     --max-tokens 1000 \
-    --temperature 0.3 \
+    --temperature 0.7 \
     --system @examples/system-prompt.txt \
     --threshold 0.7 \
     --judge-model claude-3-5-sonnet-20241022 \
     --mcp-servers examples/mcp-servers.json \
+    --iterations 2 \
     --output anthropic-evaluation-report.json
 
 echo ""

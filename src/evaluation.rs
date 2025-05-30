@@ -42,10 +42,26 @@ impl ExpectedOutput {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EvalResult {
     pub case: EvalCaseReport,
+    pub judge_score: f64,
+    pub passed: bool,
+    pub iterations: Vec<IterationResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pass_at_k: Option<PassAtKStats>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct IterationResult {
     pub actual_output: String,
     pub judge_score: f64,
     pub judge_reasoning: String,
     pub passed: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PassAtKStats {
+    pub total_iterations: usize,
+    pub passed_iterations: usize,
+    pub pass_rate: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

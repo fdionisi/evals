@@ -12,6 +12,7 @@ pub struct ModelConfig {
     pub top_p: Option<f64>,
     pub system: Option<String>,
     pub tools: Option<Vec<ToolDefinition>>,
+    pub iterations: Option<usize>,
 }
 
 impl Default for ModelConfig {
@@ -25,6 +26,7 @@ impl Default for ModelConfig {
             top_p: None,
             system: None,
             tools: None,
+            iterations: None,
         }
     }
 }
